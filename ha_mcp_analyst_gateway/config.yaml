@@ -1,5 +1,5 @@
 name: HA MCP Analyst Gateway
-version: "0.2.1"
+version: "0.2.2"
 slug: ha_mcp_analyst_gateway
 description: Narrow MCP reverse proxy over a separate Tailscale node; disabled until configured.
 url: https://github.com/jukkaasaukkonen-bit/ha-mcp-analyst-gateway

@@ -50,7 +50,8 @@ server {
         proxy_set_header Accept \$http_accept;
         proxy_set_header Content-Type \$content_type;
         proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header Connection "";\n        proxy_set_header X-Supervisor-Token "";
+        proxy_set_header Connection "";
+        proxy_set_header X-Supervisor-Token "";
         proxy_buffering off;
         proxy_read_timeout 3600s;
     }
