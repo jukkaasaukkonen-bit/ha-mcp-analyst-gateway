@@ -25,20 +25,32 @@ if ! tailscale status --json 2>/dev/null | jq -e '.BackendState == "Running"' >/
   tailscale up --auth-key="$KEY" --hostname="$HOST" --accept-dns=false --accept-routes=false
 fi
 
-cat > /etc/nginx/http.d/default.conf <<'NGINX'
+# Resolve the configured backend only from a strict allowlist.
+case "$BACKEND" in
+  http://homeassistant:8123/api/mcp)
+    UPSTREAM="http://homeassistant:8123/api/mcp"
+    HOST_HEADER="homeassistant:8123"
+    ;;
+  http://supervisor/core/api/mcp)
+    UPSTREAM="http://supervisor/core/api/mcp"
+    HOST_HEADER="supervisor"
+    ;;
+esac
+
+cat > /etc/nginx/http.d/default.conf <<NGINX
 server {
     listen 127.0.0.1:8787;
     server_name _;
     client_max_body_size 2m;
     location = /api/mcp {
-        proxy_pass http://homeassistant:8123/api/mcp;
+        proxy_pass ${UPSTREAM};
         proxy_http_version 1.1;
-        proxy_set_header Host homeassistant:8123;
-        proxy_set_header Authorization $http_authorization;
-        proxy_set_header Accept $http_accept;
-        proxy_set_header Content-Type $content_type;
+        proxy_set_header Host ${HOST_HEADER};
+        proxy_set_header Authorization \$http_authorization;
+        proxy_set_header Accept \$http_accept;
+        proxy_set_header Content-Type \$content_type;
         proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header Connection "";
+        proxy_set_header Connection "";\n        proxy_set_header X-Supervisor-Token "";
         proxy_buffering off;
         proxy_read_timeout 3600s;
     }
@@ -52,7 +64,7 @@ if [ "$PUBLIC" = "true" ]; then
   tailscale funnel --bg --https="$PORT" http://127.0.0.1:8787
   bashio::log.warning "PUBLIC Funnel enabled: review HA MCP read-only and authentication before connecting clients."
 else
-  bashio::log.info "Gateway ready locally. Public Funnel remains disabled."
+  bashio::log.info "Gateway proxy running locally; verify upstream and authentication before public exposure."
 fi
 
 while sleep 30; do

@@ -1,4 +1,4 @@
-# HA MCP Analyst Gateway v0.2.0
+# HA MCP Analyst Gateway v0.2.1
 
 **Experimental; not production-security audited.** This add-on exposes only `/api/mcp` through its own Tailscale node. It never bundles an HA access token, but the public MCP endpoint still depends on Home Assistant's own authentication and read-only tool restrictions.
 
@@ -20,3 +20,10 @@
 - The gateway does not implement separate OAuth for ChatGPT. HA's native MCP authentication requirements must be satisfied by the client. If ChatGPT cannot authenticate using its supported connection flow, do not weaken authentication: use a properly authenticated MCP broker instead.
 - `tailscaled` runs in userspace networking mode. Funnel support must be confirmed in this environment.
 - Do not grant the AI any write tools or share credentials.
+
+## v0.2.1 test gate
+The upstream now follows the allowlisted `backend_url` option. Default is `http://supervisor/core/api/mcp`.
+The Terminal & SSH `401` test only proves the endpoint is reachable **from that container**, not from this gateway.
+Before enabling Funnel, verify the gateway's own upstream connectivity and MCP authorization.
+**Do not inject SUPERVISOR_TOKEN or another administrator credential into public requests.**
+If the Supervisor route requires a Supervisor token and fails with 401, stop and redesign the backend authentication rather than weakening it.
