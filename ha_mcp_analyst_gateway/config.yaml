@@ -1,0 +1,24 @@
+name: HA MCP Analyst Gateway
+version: "0.2.0"
+slug: ha_mcp_analyst_gateway
+description: Narrow MCP reverse proxy over a separate Tailscale node; disabled until configured.
+url: https://github.com/jukkaasaukkonen-bit/ha-mcp-analyst-gateway
+arch:
+  - aarch64
+  - amd64
+startup: services
+boot: auto
+init: false
+host_network: false
+options:
+  tailscale_auth_key: ""
+  tailscale_hostname: "ha-mcp-analyst"
+  enable_public_funnel: false
+  funnel_port: 443
+  backend_url: "http://homeassistant:8123/api/mcp"
+schema:
+  tailscale_auth_key: password
+  tailscale_hostname: str
+  enable_public_funnel: bool
+  funnel_port: list(443|8443|10000)
+  backend_url: url

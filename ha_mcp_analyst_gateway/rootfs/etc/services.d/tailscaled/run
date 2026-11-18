@@ -1,0 +1,4 @@
+#!/usr/bin/with-contenv bashio
+set -e
+mkdir -p /data/tailscale
+exec tailscaled --tun=userspace-networking --state=/data/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock
