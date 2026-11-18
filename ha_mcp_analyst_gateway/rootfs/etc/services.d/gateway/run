@@ -61,12 +61,15 @@ NGINX
 nginx -t
 nginx
 
+# No public exposure in diagnostic release. Explicitly refuse unsafe configuration.
 if [ "$PUBLIC" = "true" ]; then
-  tailscale funnel --bg --https="$PORT" http://127.0.0.1:8787
-  bashio::log.warning "PUBLIC Funnel enabled: review HA MCP read-only and authentication before connecting clients."
-else
-  bashio::log.info "Gateway proxy running locally; verify upstream and authentication before public exposure."
+  bashio::log.fatal "PUBLIC FUNNEL BLOCKED in v0.2.3: authenticated MCP client flow not yet validated. Set enable_public_funnel=false."
+  exit 1
 fi
+bashio::log.info "Funnel OFF: starting read-only diagnostic checks."
+/usr/local/bin/gateway-diagnostics.sh "$BACKEND"
+bashio::log.info "Gateway started with public exposure disabled."
+
 
 while sleep 30; do
   pgrep nginx >/dev/null || exit 1

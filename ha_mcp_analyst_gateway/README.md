@@ -1,32 +1,22 @@
-# HA MCP Analyst Gateway v0.2.2
+# HA MCP Analyst Gateway v0.2.3 — diagnostic release
 
-**Experimental; not production-security audited.** This add-on exposes only `/api/mcp` through its own Tailscale node. It never bundles an HA access token, but the public MCP endpoint still depends on Home Assistant's own authentication and read-only tool restrictions.
+This is an **experimental, fail-closed** diagnostic release. **Public Funnel is intentionally blocked**, even if enabled in configuration, until the authenticated MCP flow is verified. Keep `enable_public_funnel: false`.
 
 ## Installation
-1. Upload the contents of this repository to a public GitHub repository, preserving `repository.yaml` at its root and the `ha_mcp_analyst_gateway` directory.
-2. In Home Assistant Settings > Apps > Install app > menu > Repositories, add the GitHub repository URL.
-3. Refresh the store, select HA MCP Analyst Gateway and install.
-4. Leave `enable_public_funnel: false` initially. Configure a Tailscale auth key **inside the app only**; never put it in GitHub, chat, screenshots or logs.
-5. Start and inspect logs. Verify that the gateway can join Tailscale and that the HA MCP upstream is reachable.
-6. Verify the Home Assistant MCP Server is configured read-only and requires authentication. Confirm an unauthenticated request fails.
-7. Only then explicitly enable `enable_public_funnel` and restart; review the public endpoint and test authentication again.
-8. Connect the endpoint to ChatGPT only after verifying authorization and available tools. The ChatGPT scheduled tasks do not automatically inherit a plugin connection; verify scheduled access separately.
+Update the GitHub repository from the ZIP package and then update the Home Assistant app to 0.2.3. Keep the existing Tailscale auth key in the app's private settings; do not commit credentials to GitHub.
 
-## Security / caveats
-- The public route is `/api/mcp` only; other paths return 404.
-- Tailscale Funnel is public internet access, not a private Tailnet-only service.
-- An administrator-authenticated HA MCP connection may expose sensitive home data. Read-only reduces write risk but does not remove confidentiality risk.
-- This version assumes Home Assistant is reachable at `homeassistant:8123` from the add-on container. Test this before enabling Funnel.
-- The gateway does not implement separate OAuth for ChatGPT. HA's native MCP authentication requirements must be satisfied by the client. If ChatGPT cannot authenticate using its supported connection flow, do not weaken authentication: use a properly authenticated MCP broker instead.
-- `tailscaled` runs in userspace networking mode. Funnel support must be confirmed in this environment.
-- Do not grant the AI any write tools or share credentials.
+## Diagnostics
+On startup the app logs:
+- `[DIAG] MCP_UPSTREAM_UNAUTH`: unauthenticated response from the HA MCP backend
+- `[DIAG] MCP_PROXY_UNAUTH`: unauthenticated response through Nginx
+- `[DIAG] BLOCKED_ROOT` and `[DIAG] BLOCKED_OTHER_PATH`: should be HTTP_404
+- `[DIAG] TAILSCALE`: should be RUNNING
+- `[DIAG] FUNNEL`: DISABLED_BY_RELEASE
 
-## v0.2.2 test gate
-The upstream now follows the allowlisted `backend_url` option. Default is `http://supervisor/core/api/mcp`.
-The Terminal & SSH `401` test only proves the endpoint is reachable **from that container**, not from this gateway.
-Before enabling Funnel, verify the gateway's own upstream connectivity and MCP authorization.
-**Do not inject SUPERVISOR_TOKEN or another administrator credential into public requests.**
-If the Supervisor route requires a Supervisor token and fails with 401, stop and redesign the backend authentication rather than weakening it.
+Expected upstream/proxy status is commonly HTTP_401; other status codes require investigation. HTTP_401 is **not proof** that an authenticated MCP client can connect. No tokens are logged or transmitted by these diagnostic probes.
 
-## v0.2.2
-Fixes literal backslash-n in generated Nginx config that caused an unknown directive error. No change to Funnel defaults or authentication model.
+## Limitations
+- No authenticated MCP end-to-end test yet.
+- The `/supervisor/core/api/mcp` route may require Supervisor-specific authentication and may not accept ordinary client bearer credentials. Never inject Supervisor tokens into internet-facing proxy requests.
+- The 08:00 and weekly ChatGPT tasks already scheduled are **not connected** to HA live data merely by installing this app.
+- No Funnel activation until a supported secure OAuth/authentication architecture and tool access are validated.

@@ -1,3 +1,3 @@
-# HA MCP Analyst Gateway — Home Assistant app repository
+# HA MCP Analyst Gateway
 
-Experimental Home Assistant app repository. Read the app README before enabling public Funnel. No credentials are stored in this repository.
+Experimental Home Assistant app repository. See `ha_mcp_analyst_gateway/README.md`. No secrets are stored here.
