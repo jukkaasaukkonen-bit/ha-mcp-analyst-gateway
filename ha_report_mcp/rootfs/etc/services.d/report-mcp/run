@@ -12,6 +12,8 @@ mkdir -p /data/tailscale
 # Run the read-only server on loopback only.
 python3 /usr/local/bin/report_mcp.py &
 SERVER_PID=$!
+# Check the live server from inside its own container, without exposing credentials.
+python3 /usr/local/bin/selftest.py
 if [ -n "$TS_KEY" ]; then
   tailscaled --tun=userspace-networking --state=/data/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock &
   sleep 3

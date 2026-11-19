@@ -30,7 +30,7 @@ def dispatch(message):
  if method=='notifications/initialized': return None
  if method=='initialize':
   result={'protocolVersion':'2025-03-26','capabilities':{'tools':{'listChanged':False}},
-          'serverInfo':{'name':'ha-report-mcp','version':'0.1.0'}}
+          'serverInfo':{'name':'ha-report-mcp','version':'0.1.1'}}
  elif method=='ping': result={}
  elif method=='tools/list': result={'tools':TOOLS}
  elif method=='tools/call':

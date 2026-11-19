@@ -16,3 +16,6 @@ This app is a **separate read-only MCP service**. It reads JSON exports from `/s
 - Reports may include sensitive home occupancy and temperature information; protect the key.
 - This is a minimal stateless MCP JSON-RPC implementation; ChatGPT connection compatibility has NOT yet been tested.
 - ChatGPT scheduled tasks are not automatically connected merely because this add-on exists.
+
+## v0.1.1 diagnostics
+Startup checks unauthenticated and invalid-key requests (401), authenticated tools/list (3), authenticated latest report read, blocked path (404). Logs report date/status only. Funnel remains disabled.
