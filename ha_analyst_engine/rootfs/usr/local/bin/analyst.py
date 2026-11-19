@@ -9,6 +9,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from zoneinfo import ZoneInfo
+from learning import analyze
 
 DATA = Path("/data/analyst")
 DATA.mkdir(parents=True, exist_ok=True)
@@ -140,18 +141,32 @@ def report(db, values, now):
         if len(nums)>=2:
             # Counter resets/restarts invalidate naive delta; never claim verified totals.
             cycles[e]={"observed_start":nums[0],"observed_end":nums[-1],"delta_if_monotonic":round(nums[-1]-nums[0],2) if all(b>=a for a,b in zip(nums,nums[1:])) else None}
+    learning = analyze(rows, now, INTERVAL)
+    issues.extend(learning['findings'])
+    # Record learning hypotheses with stable identifiers for future comparison.
+    db.execute("""CREATE TABLE IF NOT EXISTS hypotheses (
+        id TEXT PRIMARY KEY, first_seen TEXT NOT NULL, last_seen TEXT NOT NULL,
+        status TEXT NOT NULL, confidence TEXT NOT NULL, evidence TEXT NOT NULL)""")
+    for hypothesis in learning['hypotheses']:
+        db.execute("""INSERT INTO hypotheses (id,first_seen,last_seen,status,confidence,evidence)
+            VALUES (?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET
+            last_seen=excluded.last_seen,status=excluded.status,
+            confidence=excluded.confidence,evidence=excluded.evidence""",
+            (hypothesis['id'],now.isoformat(),now.isoformat(),hypothesis['status'],
+             hypothesis['confidence'],json.dumps(hypothesis,ensure_ascii=False)))
+    db.commit()
     # No GREEN when sampling has not yet accumulated adequate evidence.
-    if coverage < 75:
+    if coverage < 75 or not learning['windows']['1d']['mature']:
         issues.append({"priority":"P2","finding":"Insufficient 24h sampling coverage","coverage_pct":coverage})
     status="RED" if any(i["priority"]=="P1" for i in issues) else "AMBER" if issues else "GREEN"
     payload={"date":now.date().isoformat(),"generated_at":now.isoformat(),"status":status,
              "source":"HA API /api/states only; sampled snapshots; not full Recorder or logs",
-             "data_quality":{"available":len(values),"configured":len(ENTITIES),"seven_day_samples":len(rows),"samples_24h":unique_times,"expected_samples_24h":expected,"coverage_24h_pct":coverage,"provisional":coverage<75},
+             "data_quality":{"available":len(values),"configured":len(ENTITIES),"seven_day_samples":len(rows),"samples_24h":unique_times,"expected_samples_24h":expected,"coverage_24h_pct":coverage,"provisional":coverage<75 or not learning['windows']['1d']['mature']},
              "current":{e:state(e) for e in ENTITIES},
-             "temperature_7d":metrics,"cycle_counters_7d":cycles,
+             "temperature_7d":metrics,"cycle_counters_7d":cycles,"optimization":learning,
              "findings":issues,
-             "learning_note":"Baseline grows from collected samples. Correlation is not causal savings evidence. No automatic optimization changes.",
-             "limitations":["No HA system log, trace, recorder history or verified electricity cost attribution in v1.1",
+             "learning_note":"7/30/90 day baselines and evidence-ranked hypotheses; no automatic control changes.",
+             "limitations":["No HA system log, trace, recorder history or verified electricity cost attribution in v1.2",
                             "ChatGPT scheduled tasks are not connected to this local report automatically."]}
     db.execute("INSERT OR REPLACE INTO reports VALUES(?,?,?)",
                (now.date().isoformat(),now.isoformat(),json.dumps(payload,ensure_ascii=False)))

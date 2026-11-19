@@ -1,18 +1,22 @@
-# HA Analyst Engine v1.1.0
+# HA Analyst Engine v1.2.0
 
-This version extends the existing v1.0 Home Assistant app, keeping `/data/analyst/learning.sqlite3` intact across upgrades.
+Local Home Assistant analytics. Keeps the v1.1 sampling, persistent notifications and existing `/data/analyst/learning.sqlite3` database. Adds offline-tested 1/7/30/90-day trend windows, temperature aggregates, conservative counter deltas, repeated unavailable/unknown detection, and stable learning-hypothesis IDs. All additional analytics use **observed 15-minute samples**, not historical Recorder backfill. Early windows are provisional.
 
-- Read-only `/api/states` sampling at configurable intervals.
-- 24-hour sampling coverage and provisional/AMBER reports when less than 75% of expected samples exist.
-- 7-day sampled temperature trends and monotonic counter deltas.
-- Local SQLite observation and report history.
-- At 08:00 Europe/Helsinki, writes a JSON and text report and, by default, a **Home Assistant persistent notification**.
-- The **only HA write** is an optional POST to `persistent_notification/create`; this is not device control. Set `notify_persistent: false` to disable it.
-- Notifications appear in the HA notification interface; they are **not** phone push notifications and do not reach ChatGPT automatically.
-- No HA system log, Recorder history backfill, automation traces or verified savings attribution yet. Do not treat GREEN as a full-system audit.
+## Safety
 
-## Upgrade
-Replace **only** the existing `ha_analyst_engine/` directory in your GitHub Desktop clone with this archive's `ha_analyst_engine/` directory. Keep the existing `ha_mcp_analyst_gateway/`, `repository.yaml`, and root `README.md`. Commit and push. Home Assistant > Settings > Apps > Install app > Check for updates > Update HA Analyst Engine to v1.1.0.
+No heating or charging control, no HA YAML modifications, no exposed ports, no cloud service. The only existing write action is the v1.1 `persistent_notification.create` report notification. HA state access uses Supervisor token internally, never exported. No MCP or Funnel integration.
 
-## Validate
-Look for `[START]`, `[SAMPLE]`, `[REPORT]`, and `[NOTIFY]` after the next 08:00 report. If `[NOTIFY_ERROR]` occurs, report the error text without secrets. Existing 19.11 report is preserved; no retroactive duplicate notification is sent for that day.
+## Important limitations
+
+- Existing v1.1 samples and reports are preserved across upgrades, provided Supervisor preserves the app's `/data`.
+- Reports are created once per local day at 08:00; updating after 08:00 does not replace that day's report.
+- Cycle counter changes are only reported when samples are monotonic. They are observations, not independently audited event counts.
+- Financial sensor values are point-in-time readings, **not** independently validated savings. No causal savings claim is made.
+- No full HA system log, automation traces, Recorder backfill, or ChatGPT push/delivery yet.
+- Learning hypotheses are stored in the SQLite `hypotheses` table and included in the report. This is evidence tracking, not autonomous model retraining.
+
+## Install
+
+In the existing GitHub repository, replace **only** `ha_analyst_engine/` with the folder from this update ZIP. Preserve `ha_mcp_analyst_gateway/`, root `repository.yaml` and root `README.md`. Commit and push with GitHub Desktop, then refresh Home Assistant App Store and update the existing HA Analyst Engine app. Do not uninstall it (uninstall could remove `/data`). Keep the old MCP gateway Funnel OFF.
+
+After updating, look for `[START]` and `[SAMPLE]` in logs. The next daily `[REPORT]` will include the `optimization` object in `/data/analyst/latest.json`. Persistent notification remains enabled when configured.
