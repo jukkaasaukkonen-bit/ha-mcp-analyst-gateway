@@ -1,21 +1,16 @@
-# HA Report MCP v0.1.0 — closed beta
-This app is a **separate read-only MCP service**. It reads JSON exports from `/share/ha_analyst_reports` mounted read-only. It does not access HA's API or database.
+# HA Report MCP v0.3.0 — local security review build
 
-## Setup
-1. Update HA Analyst Engine to v1.2.1 first. It exports reports on the next daily run; an existing same-day report will not automatically re-export.
-2. Install this app from the same Home Assistant GitHub repository.
-3. In Configuration set a cryptographically random 32+ character `api_key`, and optionally a new Tailscale auth key for this separate node. Never paste keys into chat or GitHub.
-4. Keep `enable_public_funnel=false`. Startup must log `Report MCP ready ... Funnel OFF`.
-5. This release **refuses** public Funnel activation. This prevents premature exposure before a full client authentication test.
-6. Once the API-key MCP handshake and transport compatibility are verified in a later release, publish only this MCP service over Tailscale Funnel. Use the same key in the plugin connection settings via a supported secure API-key flow; never hard-code it in plugin source.
+**Not production ready; Funnel hard-disabled.** This package is for review and controlled local integration testing only. Do not overwrite the existing working v0.1.1 Home Assistant app.
 
-## Security / limitations
-- Only `get_latest_report`, `list_report_dates`, and `get_report_by_date` are exposed.
-- No HA control endpoints, Supervisor token, YAML, state writes or filesystem traversal.
-- HTTP bearer key protects reads; loopback-only listener; fail-closed public exposure.
-- Reports may include sensitive home occupancy and temperature information; protect the key.
-- This is a minimal stateless MCP JSON-RPC implementation; ChatGPT connection compatibility has NOT yet been tested.
-- ChatGPT scheduled tasks are not automatically connected merely because this add-on exists.
+Changes: ChatGPT-domain-only dynamic client registration; PKCE S256; one-time authorization codes; 15-minute access tokens; rotating 30-day refresh tokens; hashed tokens in SQLite; explicit reports:read scope; MCP protected-resource discovery; Origin check; strict JSON-RPC parsing and request size limits.
 
-## v0.1.1 diagnostics
-Startup checks unauthenticated and invalid-key requests (401), authenticated tools/list (3), authenticated latest report read, blocked path (404). Logs report date/status only. Funnel remains disabled.
+Test with `python3 -m unittest discover -s tests -v` on a machine with Python 3.11+.
+
+Unverified / deployment blockers:
+- Live GitHub login and ChatGPT authorization flow, including dynamic client registration compatibility.
+- ChatGPT MCP transport and protocol version negotiation, streaming behavior and any required resource metadata URLs.
+- Secure HTTPS ingress / Funnel integration, session/consent UI, rate limits, OAuth CSRF and authorization server security review.
+- No proof that scheduled ChatGPT tasks can access connected MCP tools.
+- GitHub numeric account ID must be obtained from GitHub via a trusted lookup, never guessed; keep client secret out of repository.
+
+**Do not set `enable_public_funnel: true`**. No HA control tools are exposed.

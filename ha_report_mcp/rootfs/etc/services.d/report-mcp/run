@@ -8,12 +8,17 @@ if [ "${#REPORT_MCP_KEY}" -lt 32 ]; then
   bashio::log.fatal "Set a random API key of at least 32 characters before starting"
   exit 1
 fi
+export GITHUB_CLIENT_ID="$(bashio::config 'github_client_id')"
+export GITHUB_CLIENT_SECRET="$(bashio::config 'github_client_secret')"
+export GITHUB_ALLOWED_LOGIN="$(bashio::config 'allowed_github_login')"
+export GITHUB_ALLOWED_ID="$(bashio::config 'allowed_github_id')"
+export PUBLIC_BASE_URL="$(bashio::config 'public_base_url')"
 mkdir -p /data/tailscale
 # Run the read-only server on loopback only.
-python3 /usr/local/bin/report_mcp.py &
+python3 /usr/local/bin/oauth_mcp.py &
 SERVER_PID=$!
 # Check the live server from inside its own container, without exposing credentials.
-python3 /usr/local/bin/selftest.py
+python3 /usr/local/bin/oauth_selftest.py
 if [ -n "$TS_KEY" ]; then
   tailscaled --tun=userspace-networking --state=/data/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock &
   sleep 3
@@ -23,8 +28,8 @@ if [ -n "$TS_KEY" ]; then
 fi
 if [ "$PUBLIC" = "true" ]; then
   # Deliberately fail closed until a real authenticated client handshake is tested.
-  bashio::log.fatal "Public Funnel is disabled in v0.1.0 pending authenticated end-to-end validation"
+  bashio::log.fatal "Public Funnel remains disabled in v0.3.0 review build until a real OAuth client handshake and external security review"
   exit 1
 fi
-bashio::log.info "Report MCP ready on 127.0.0.1:8787; Funnel OFF"
+bashio::log.info "OAuth MCP local validation server ready on 127.0.0.1:8787; Funnel OFF"
 wait "$SERVER_PID"
