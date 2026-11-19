@@ -1,5 +1,5 @@
 name: HA Analyst Engine
-version: "1.0.0"
+version: "1.1.0"
 slug: ha_analyst_engine
 description: Local read-only Home Assistant health analytics and historical learning
 arch:
@@ -16,8 +16,10 @@ options:
   report_minute: 0
   timezone: Europe/Helsinki
   sample_interval_minutes: 15
+  notify_persistent: true
 schema:
   report_hour: int(0,23)
   report_minute: int(0,59)
   timezone: str
   sample_interval_minutes: int(5,60)
+  notify_persistent: bool

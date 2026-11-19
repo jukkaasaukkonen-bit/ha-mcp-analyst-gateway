@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only local HA analytics. No HA write methods, services, or shell access."""
+"""Read-only device analytics; optional write is limited to a persistent notification."""
 import datetime as dt
 import json
 import os
@@ -20,6 +20,7 @@ ZONE = ZoneInfo(CONFIG.get("timezone", "Europe/Helsinki"))
 HOUR = int(CONFIG.get("report_hour", 8))
 MINUTE = int(CONFIG.get("report_minute", 0))
 INTERVAL = max(5, min(60, int(CONFIG.get("sample_interval_minutes", 15))))
+NOTIFY = bool(CONFIG.get("notify_persistent", True))
 
 # Explicit allowlist. Expand only after verifying entity IDs on the user's HA.
 ENTITIES = [
@@ -43,6 +44,8 @@ ENTITIES = [
  "input_text.heating_optimizer_v1_last_result",
  "sensor.kokonaissaasto_tanaan",
  "sensor.ivt490_accumulated_consumption",
+ "sensor.ivt490_nettosaasto_tanaan",
+ "sensor.ivt490_nettosaasto_tassa_kuussa",
 ]
 
 def read_states():
@@ -66,6 +69,7 @@ def db_open():
         PRIMARY KEY(ts,entity))""")
     db.execute("""CREATE TABLE IF NOT EXISTS reports (
         day TEXT PRIMARY KEY, created_at TEXT NOT NULL, payload TEXT NOT NULL)""")
+    db.execute("""CREATE TABLE IF NOT EXISTS notifications (day TEXT PRIMARY KEY, sent_at TEXT NOT NULL)""")
     db.commit()
     return db
 
@@ -78,12 +82,41 @@ def numeric(v):
     try: return float(v)
     except (TypeError, ValueError): return None
 
+def notify_once(db, day, payload):
+    """Only permitted HA write: persistent_notification.create. Never device control."""
+    if not NOTIFY or db.execute("SELECT 1 FROM notifications WHERE day=?", (day,)).fetchone():
+        return
+    if not TOKEN:
+        raise RuntimeError("Missing Supervisor API token")
+    issues = payload["findings"][:5]
+    summary = "\n".join("- %s: %s" % (x["priority"], x["finding"]) for x in issues)
+    message = ("Tila: %s | Havainnot: %d\n\n%s\n\n" %
+        (payload["status"], len(payload["findings"]), summary or "Ei sääntöjen tunnistamia poikkeamia."))
+    message += "Mittauskattavuus 24 h: %s. %s" % (
+        payload["data_quality"]["coverage_24h_pct"],
+        "Raportti on alustava." if payload["data_quality"]["provisional"] else "")
+    body = json.dumps({"title":"HA Analyst | " + day,
+        "message":message, "notification_id":"ha_analyst_daily"}).encode()
+    req = urllib.request.Request(BASE + "/api/services/persistent_notification/create",
+        data=body, method="POST", headers={"Authorization":"Bearer " + TOKEN,
+        "Content-Type":"application/json"})
+    with urllib.request.urlopen(req, timeout=15) as response:
+        if response.status not in (200,201):
+            raise RuntimeError("Notification returned HTTP %d" % response.status)
+    db.execute("INSERT INTO notifications VALUES (?,?)",(day,dt.datetime.now(ZONE).isoformat()))
+    db.commit()
+    print("[NOTIFY] Persistent notification created",flush=True)
+
 def report(db, values, now):
     state = lambda e: values.get(e, {}).get("state", "missing")
     rows = db.execute("SELECT entity,state,ts FROM samples WHERE ts >= ?",
         ((now-dt.timedelta(days=7)).isoformat(),)).fetchall()
     by_entity={}
     for e,v,t in rows: by_entity.setdefault(e,[]).append((v,t))
+    rows24 = [r for r in rows if r[2] >= (now-dt.timedelta(hours=24)).isoformat()]
+    unique_times = len(set(r[2] for r in rows24))
+    expected = max(1, int(24*60/INTERVAL))
+    coverage = round(min(100,100*unique_times/expected),1)
     issues=[]
     missing=[e for e in ENTITIES if state(e) == "missing"]
     unhealthy=[e for e in ENTITIES if state(e) in ("unknown","unavailable")]
@@ -107,15 +140,18 @@ def report(db, values, now):
         if len(nums)>=2:
             # Counter resets/restarts invalidate naive delta; never claim verified totals.
             cycles[e]={"observed_start":nums[0],"observed_end":nums[-1],"delta_if_monotonic":round(nums[-1]-nums[0],2) if all(b>=a for a,b in zip(nums,nums[1:])) else None}
+    # No GREEN when sampling has not yet accumulated adequate evidence.
+    if coverage < 75:
+        issues.append({"priority":"P2","finding":"Insufficient 24h sampling coverage","coverage_pct":coverage})
     status="RED" if any(i["priority"]=="P1" for i in issues) else "AMBER" if issues else "GREEN"
     payload={"date":now.date().isoformat(),"generated_at":now.isoformat(),"status":status,
              "source":"HA API /api/states only; sampled snapshots; not full Recorder or logs",
-             "data_quality":{"available":len(values),"configured":len(ENTITIES),"seven_day_samples":len(rows)},
+             "data_quality":{"available":len(values),"configured":len(ENTITIES),"seven_day_samples":len(rows),"samples_24h":unique_times,"expected_samples_24h":expected,"coverage_24h_pct":coverage,"provisional":coverage<75},
              "current":{e:state(e) for e in ENTITIES},
              "temperature_7d":metrics,"cycle_counters_7d":cycles,
              "findings":issues,
              "learning_note":"Baseline grows from collected samples. Correlation is not causal savings evidence. No automatic optimization changes.",
-             "limitations":["No HA system log, trace, recorder history or electricity cost attribution in v1.0",
+             "limitations":["No HA system log, trace, recorder history or verified electricity cost attribution in v1.1",
                             "ChatGPT scheduled tasks are not connected to this local report automatically."]}
     db.execute("INSERT OR REPLACE INTO reports VALUES(?,?,?)",
                (now.date().isoformat(),now.isoformat(),json.dumps(payload,ensure_ascii=False)))
@@ -125,7 +161,11 @@ def report(db, values, now):
        f"HA ANALYST {payload['date']} | {status} | {len(issues)} findings\n"+
        "\n".join(f"{i['priority']}: {i['finding']}" for i in issues)+
        "\nData: "+str(len(values))+"/"+str(len(ENTITIES))+" configured entities\n")
-    print("[REPORT] "+json.dumps({"date":payload["date"],"status":status,"findings":issues},ensure_ascii=False),flush=True)
+    print("[REPORT] "+json.dumps({"date":payload["date"],"status":status,"findings":issues,"coverage_24h_pct":coverage},ensure_ascii=False),flush=True)
+    try:
+        notify_once(db,now.date().isoformat(),payload)
+    except Exception as exc:
+        print("[NOTIFY_ERROR] %s: %s" % (type(exc).__name__,str(exc)[:180]),flush=True)
 
 def main():
     db=db_open()
