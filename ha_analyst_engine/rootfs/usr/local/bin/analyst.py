@@ -172,6 +172,23 @@ def report(db, values, now):
                (now.date().isoformat(),now.isoformat(),json.dumps(payload,ensure_ascii=False)))
     db.commit()
     (DATA/"latest.json").write_text(json.dumps(payload,indent=2,ensure_ascii=False))
+    # Atomic export to a shared folder. No HA token or database is exported.
+    try:
+        import os as _os
+        shared = Path("/share/ha_analyst_reports")
+        shared.mkdir(parents=True, exist_ok=True)
+        blob = json.dumps(payload, indent=2, ensure_ascii=False)
+        tmp = shared / ("." + now.date().isoformat() + ".tmp")
+        tmp.write_text(blob, encoding="utf-8")
+        _os.chmod(tmp, 0o644)
+        _os.replace(tmp, shared / (now.date().isoformat() + ".json"))
+        latest_tmp = shared / ".latest.tmp"
+        latest_tmp.write_text(blob, encoding="utf-8")
+        _os.chmod(latest_tmp, 0o644)
+        _os.replace(latest_tmp, shared / "latest.json")
+        print("[EXPORT] Report available in /share/ha_analyst_reports", flush=True)
+    except Exception as export_exc:
+        print("[EXPORT_ERROR] " + str(export_exc)[:180], flush=True)
     (DATA/"latest.txt").write_text(
        f"HA ANALYST {payload['date']} | {status} | {len(issues)} findings\n"+
        "\n".join(f"{i['priority']}: {i['finding']}" for i in issues)+
@@ -182,7 +199,33 @@ def report(db, values, now):
     except Exception as exc:
         print("[NOTIFY_ERROR] %s: %s" % (type(exc).__name__,str(exc)[:180]),flush=True)
 
+def export_existing_latest():
+    source = DATA / "latest.json"
+    if not source.is_file():
+        return
+    try:
+        import os as _os
+        import re as _re
+        payload = json.loads(source.read_text(encoding="utf-8"))
+        shared = Path("/share/ha_analyst_reports")
+        shared.mkdir(parents=True, exist_ok=True)
+        blob = json.dumps(payload, indent=2, ensure_ascii=False)
+        tmp = shared / ".latest.tmp"
+        tmp.write_text(blob, encoding="utf-8")
+        _os.chmod(tmp, 0o644)
+        _os.replace(tmp, shared / "latest.json")
+        date = payload.get("date", "")
+        if isinstance(date, str) and _re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+            dated = shared / (date + ".json")
+            if not dated.exists():
+                dated.write_text(blob, encoding="utf-8")
+                _os.chmod(dated, 0o644)
+        print("[EXPORT] Existing latest report copied to shared feed", flush=True)
+    except Exception as exc:
+        print("[EXPORT_ERROR] Existing report: " + str(exc)[:180], flush=True)
+
 def main():
+    export_existing_latest()
     db=db_open()
     last_sample=0
     print("[START] Read-only analyst, report at %02d:%02d %s" % (HOUR,MINUTE,ZONE),flush=True)

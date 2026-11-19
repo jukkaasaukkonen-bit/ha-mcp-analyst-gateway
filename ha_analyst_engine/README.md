@@ -20,3 +20,9 @@ No heating or charging control, no HA YAML modifications, no exposed ports, no c
 In the existing GitHub repository, replace **only** `ha_analyst_engine/` with the folder from this update ZIP. Preserve `ha_mcp_analyst_gateway/`, root `repository.yaml` and root `README.md`. Commit and push with GitHub Desktop, then refresh Home Assistant App Store and update the existing HA Analyst Engine app. Do not uninstall it (uninstall could remove `/data`). Keep the old MCP gateway Funnel OFF.
 
 After updating, look for `[START]` and `[SAMPLE]` in logs. The next daily `[REPORT]` will include the `optimization` object in `/data/analyst/latest.json`. Persistent notification remains enabled when configured.
+
+
+## v1.2.1 report export
+On each successful 08:00 report, writes `latest.json` and dated JSON to `/share/ha_analyst_reports/` using atomic replacement. Does not export the HA API token or SQLite database. Previous reports remain available in `/data/analyst/`. Existing daily report row prevents re-export of the same day; the first export is next scheduled report.
+
+On restart, exports an existing latest.json immediately without re-running the daily report.

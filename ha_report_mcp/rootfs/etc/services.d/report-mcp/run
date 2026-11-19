@@ -1,0 +1,28 @@
+#!/usr/bin/with-contenv bashio
+set -euo pipefail
+export REPORT_MCP_KEY="$(bashio::config 'api_key')"
+TS_KEY="$(bashio::config 'tailscale_auth_key')"
+TS_HOST="$(bashio::config 'tailscale_hostname')"
+PUBLIC="$(bashio::config 'enable_public_funnel')"
+if [ "${#REPORT_MCP_KEY}" -lt 32 ]; then
+  bashio::log.fatal "Set a random API key of at least 32 characters before starting"
+  exit 1
+fi
+mkdir -p /data/tailscale
+# Run the read-only server on loopback only.
+python3 /usr/local/bin/report_mcp.py &
+SERVER_PID=$!
+if [ -n "$TS_KEY" ]; then
+  tailscaled --tun=userspace-networking --state=/data/tailscale/tailscaled.state --socket=/var/run/tailscale/tailscaled.sock &
+  sleep 3
+  if ! tailscale status --json 2>/dev/null | jq -e '.BackendState == "Running"' >/dev/null; then
+    tailscale up --auth-key="$TS_KEY" --hostname="$TS_HOST" --accept-dns=false --accept-routes=false
+  fi
+fi
+if [ "$PUBLIC" = "true" ]; then
+  # Deliberately fail closed until a real authenticated client handshake is tested.
+  bashio::log.fatal "Public Funnel is disabled in v0.1.0 pending authenticated end-to-end validation"
+  exit 1
+fi
+bashio::log.info "Report MCP ready on 127.0.0.1:8787; Funnel OFF"
+wait "$SERVER_PID"
