@@ -1,0 +1,23 @@
+name: HA Analyst Engine
+version: "1.0.0"
+slug: ha_analyst_engine
+description: Local read-only Home Assistant health analytics and historical learning
+arch:
+  - aarch64
+  - amd64
+startup: services
+boot: auto
+init: false
+homeassistant_api: true
+hassio_api: false
+hassio_role: default
+options:
+  report_hour: 8
+  report_minute: 0
+  timezone: Europe/Helsinki
+  sample_interval_minutes: 15
+schema:
+  report_hour: int(0,23)
+  report_minute: int(0,59)
+  timezone: str
+  sample_interval_minutes: int(5,60)
